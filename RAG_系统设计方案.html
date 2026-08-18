@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>企业级 RAG 个人知识问答系统 — 设计方案</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f8f9fa;
+    --bg-card: #ffffff;
+    --text: #1a1a1a;
+    --text-soft: #555;
+    --text-mute: #888;
+    --border: #e0e0e0;
+    --border-soft: #eee;
+    --accent: #185FA5;
+    --accent-light: #E6F1FB;
+    --green: #0F6E56;
+    --green-light: #E1F5EE;
+    --amber: #854F0B;
+    --amber-light: #FAEEDA;
+    --coral: #993C1D;
+    --coral-light: #FAECE7;
+    --purple: #534AB7;
+    --purple-light: #EEEDFE;
+    --code-bg: #f5f5f5;
+    --radius: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg-soft);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .header {
+    text-align: center;
+    padding: 48px 24px 40px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    border-radius: 0 0 20px 20px;
+    margin-bottom: 40px;
+  }
+  .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.5px; }
+  .header .subtitle { font-size: 15px; color: var(--text-soft); }
+  .header .meta { font-size: 13px; color: var(--text-mute); margin-top: 12px; }
+  .header .badges { display: flex; justify-content: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .badge {
+    font-size: 12px; padding: 4px 12px; border-radius: 20px;
+    background: var(--accent-light); color: var(--accent);
+  }
+  .badge.green { background: var(--green-light); color: var(--green); }
+  .badge.amber { background: var(--amber-light); color: var(--amber); }
+  .badge.purple { background: var(--purple-light); color: var(--purple); }
+
+  section { margin-bottom: 36px; }
+  h2 {
+    font-size: 22px; font-weight: 600; margin-bottom: 16px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--border-soft);
+    display: flex; align-items: center; gap: 8px;
+  }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 14px;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 20px 0 10px; color: var(--text); }
+  h4 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; color: var(--text-soft); }
+
+  p { margin-bottom: 10px; color: var(--text-soft); }
+  strong { color: var(--text); }
+  ul, ol { margin: 8px 0 12px 20px; color: var(--text-soft); }
+  li { margin-bottom: 6px; }
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border-soft);
+    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px;
+  }
+  .card-accent { border-left: 3px solid var(--accent); }
+  .card-green { border-left: 3px solid var(--green); }
+  .card-amber { border-left: 3px solid var(--amber); }
+  .card-coral { border-left: 3px solid var(--coral); }
+  .card-purple { border-left: 3px solid var(--purple); }
+
+  .layer-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .layer-item {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 16px 20px; border-radius: var(--radius);
+    border: 1px solid var(--border-soft); background: var(--bg-card);
+  }
+  .layer-num {
+    flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; color: #fff;
+  }
+  .layer-content h4 { margin: 0 0 4px; font-size: 15px; color: var(--text); }
+  .layer-content p { margin: 0; font-size: 13px; color: var(--text-mute); }
+  .layer-content .techs { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tech-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    background: var(--bg-soft); color: var(--text-soft);
+    border: 1px solid var(--border-soft);
+    font-family: "SF Mono", "Fira Code", monospace;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th {
+    text-align: left; padding: 10px 12px; font-weight: 600;
+    background: var(--bg-soft); border-bottom: 2px solid var(--border);
+    color: var(--text); white-space: nowrap;
+  }
+  td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border-soft);
+    color: var(--text-soft); vertical-align: top;
+  }
+  tr:hover td { background: var(--bg-soft); }
+  .recommend { color: var(--green); font-weight: 600; }
+
+  .callout {
+    padding: 14px 18px; border-radius: 8px; margin: 12px 0;
+    font-size: 13px; line-height: 1.6;
+  }
+  .callout-info { background: var(--accent-light); border: 1px solid #B5D4F4; }
+  .callout-warn { background: var(--amber-light); border: 1px solid #FAC775; }
+  .callout-tip { background: var(--green-light); border: 1px solid #9FE1CB; }
+
+  .phase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .phase-card {
+    padding: 16px 20px; border-radius: var(--radius);
+    border: 1px solid var(--border-soft); background: var(--bg-card);
+  }
+  .phase-card h4 { margin: 0 0 8px; font-size: 14px; }
+  .phase-card .duration { font-size: 12px; color: var(--text-mute); margin-bottom: 8px; }
+  .phase-card ul { margin: 4px 0 0 16px; font-size: 13px; }
+  .phase-card li { margin-bottom: 4px; }
+
+  code {
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 13px; background: var(--code-bg); padding: 1px 5px;
+    border-radius: 3px; color: var(--coral);
+  }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 16px 20px;
+    border-radius: 8px; overflow-x: auto; margin: 12px 0;
+    font-size: 13px; line-height: 1.5;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  .toc {
+    background: var(--bg); border: 1px solid var(--border-soft);
+    border-radius: var(--radius); padding: 20px 28px; margin-bottom: 32px;
+  }
+  .toc h3 { margin: 0 0 12px; font-size: 15px; }
+  .toc ol { margin: 0 0 0 20px; }
+  .toc li { margin-bottom: 4px; font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .metric-row { display: flex; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+  .metric {
+    flex: 1; min-width: 120px; text-align: center;
+    padding: 14px 16px; background: var(--bg-card);
+    border: 1px solid var(--border-soft); border-radius: var(--radius);
+  }
+  .metric .val { font-size: 22px; font-weight: 600; color: var(--accent); }
+  .metric .label { font-size: 12px; color: var(--text-mute); margin-top: 4px; }
+
+  .footer {
+    text-align: center; padding: 24px; font-size: 13px; color: var(--text-mute);
+    border-top: 1px solid var(--border-soft); margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>企业级 RAG 个人知识问答系统</h1>
+  <div class="subtitle">设计方案与技术选型报告</div>
+  <div class="badges">
+    <span class="badge">六层架构</span>
+    <span class="badge green">混合检索</span>
+    <span class="badge amber">引用溯源</span>
+    <span class="badge purple">私有化部署</span>
+  </div>
+  <div class="meta">版本 1.0 &middot; 2026-08-10</div>
+</div>
+
+<div class="toc">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#overview">系统概述与设计目标</a></li>
+    <li><a href="#arch">六层架构设计</a></li>
+    <li><a href="#ingestion">数据接入层设计</a></li>
+    <li><a href="#processing">文档处理层设计</a></li>
+    <li><a href="#storage">存储层设计</a></li>
+    <li><a href="#retrieval">检索层设计</a></li>
+    <li><a href="#generation">生成层设计</a></li>
+    <li><a href="#app">应用层设计</a></li>
+    <li><a href="#tech">技术选型详解</a></li>
+    <li><a href="#deploy">部署架构</a></li>
+    <li><a href="#roadmap">实施路线图</a></li>
+    <li><a href="#optimize">性能优化策略</a></li>
+    <li><a href="#security">安全与合规</a></li>
+  </ol>
+</div>
+
+<section id="overview">
+  <h2><span class="num">1</span>系统概述与设计目标</h2>
+  <div class="card card-accent">
+    <p>本系统是一个面向企业内部的<strong>检索增强生成（RAG）个人知识问答平台</strong>，将企业文档、个人笔记、技术资料等非结构化数据转化为可问答的知识库，通过大语言模型生成精准、可溯源的回答。</p>
+    <h4>核心设计目标</h4>
+    <ul>
+      <li><strong>精准性</strong>：回答基于检索到的真实文档片段，减少幻觉，每条回答附引用来源</li>
+      <li><strong>多格式</strong>：支持 PDF、Word、Excel、PPT、Markdown、HTML、图片等主流格式</li>
+      <li><strong>高性能</strong>：查询 P99 延迟 &lt; 3s，支持百万级文档Chunk的向量检索</li>
+      <li><strong>私有化</strong>：全栈开源方案，支持完全离线部署，数据不出域</li>
+      <li><strong>可扩展</strong>：微服务架构，各组件独立扩缩容，支持水平扩展</li>
+      <li><strong>易用性</strong>：提供对话式 Web UI，支持多轮对话、追问、引用查看</li>
+    </ul>
+  </div>
+</section>
+
+<section id="arch">
+  <h2><span class="num">2</span>六层架构设计</h2>
+  <p>系统采用六层分层架构，自下而上依次为：数据接入层、文档处理层、存储层、检索层、生成层、应用层。各层通过标准 API 解耦，可独立部署和扩缩容。</p>
+
+  <div class="layer-grid">
+    <div class="layer-item">
+      <div class="layer-num" style="background:#3B6D11;">L1</div>
+      <div class="layer-content">
+        <h4>数据接入层 (Data Ingestion)</h4>
+        <p>负责多源数据的采集与接入，是知识库的入口</p>
+        <div class="techs">
+          <span class="tech-tag">Unstructured</span>
+          <span class="tech-tag">PaddleOCR</span>
+          <span class="tech-tag">PyMuPDF</span>
+          <span class="tech-tag">python-docx</span>
+          <span class="tech-tag">Web Crawler</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer-item">
+      <div class="layer-num" style="background:#993C1D;">L2</div>
+      <div class="layer-content">
+        <h4>文档处理层 (Document Processing)</h4>
+        <p>文档清洗、智能分块、向量化、元数据提取</p>
+        <div class="techs">
+          <span class="tech-tag">Semantic Chunking</span>
+          <span class="tech-tag">BGE-M3</span>
+          <span class="tech-tag">spaCy</span>
+          <span class="tech-tag">jieba</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer-item">
+      <div class="layer-num" style="background:#854F0B;">L3</div>
+      <div class="layer-content">
+        <h4>存储层 (Storage)</h4>
+        <p>向量存储、文档原文件存储、元数据存储、缓存</p>
+        <div class="techs">
+          <span class="tech-tag">Milvus</span>
+          <span class="tech-tag">PostgreSQL</span>
+          <span class="tech-tag">MinIO</span>
+          <span class="tech-tag">Redis</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer-item">
+      <div class="layer-num" style="background:#0F6E56;">L4</div>
+      <div class="layer-content">
+        <h4>检索层 (Retrieval)</h4>
+        <p>查询理解、混合检索、重排序、多路召回</p>
+        <div class="techs">
+          <span class="tech-tag">Vector Search</span>
+          <span class="tech-tag">BM25</span>
+          <span class="tech-tag">BGE-Reranker-v2</span>
+          <span class="tech-tag">HyDE</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer-item">
+      <div class="layer-num" style="background:#534AB7;">L5</div>
+      <div class="layer-content">
+        <h4>生成层 (Generation)</h4>
+        <p>LLM 推理、Prompt 工程、上下文组装、引用溯源</p>
+        <div class="techs">
+          <span class="tech-tag">Qwen2.5-72B</span>
+          <span class="tech-tag">vLLM</span>
+          <span class="tech-tag">Prompt Template</span>
+          <span class="tech-tag">Citation</span>
+        </div>
+      </div>
+    </div>
+    <div class="layer-item">
+      <div class="layer-num" style="background:#185FA5;">L6</div>
+      <div class="layer-content">
+        <h4>应用层 (Application)</h4>
+        <p>Web UI、API 网关、认证鉴权、会话管理、监控</p>
+        <div class="techs">
+          <span class="tech-tag">React + TypeScript</span>
+          <span class="tech-tag">FastAPI</span>
+          <span class="tech-tag">JWT + RBAC</span>
+          <span class="tech-tag">Prometheus + Grafana</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="ingestion">
+  <h2><span class="num">3</span>数据接入层设计</h2>
+  <div class="card card-green">
+    <h3>3.1 多格式文档解析</h3>
+    <table>
+      <thead>
+        <tr><th>格式</th><th>解析工具</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PDF</td><td>PyMuPDF + PaddleOCR</td><td>文本层直接提取，扫描件走 OCR</td></tr>
+        <tr><td>Word (.docx)</td><td>python-docx</td><td>提取段落、表格、标题层级</td></tr>
+        <tr><td>Excel (.xlsx)</td><td>openpyxl</td><td>按 Sheet 分块，保留行列结构</td></tr>
+        <tr><td>PPT (.pptx)</td><td>python-pptx</td><td>按 Slide 分块，提取备注</td></tr>
+        <tr><td>Markdown</td><td>markdown-it</td><td>按标题层级分块</td></tr>
+        <tr><td>HTML</td><td>BeautifulSoup</td><td>清洗标签，提取正文</td></tr>
+        <tr><td>图片</td><td>PaddleOCR</td><td>OCR 提取文字，支持中英文</td></tr>
+        <tr><td>通用格式</td><td>Unstructured</td><td>统一接口，自动识别格式</td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.2 数据源接入方式</h3>
+    <ul>
+      <li><strong>手动上传</strong>：Web 界面拖拽上传，支持批量</li>
+      <li><strong>目录监控</strong>：监听指定目录，自动入库新增文件</li>
+      <li><strong>API 对接</strong>：REST API 推送，支持第三方系统集成</li>
+      <li><strong>网页抓取</strong>：配置 URL 列表，定时爬取</li>
+      <li><strong>数据库同步</strong>：从关系数据库抽取知识条目</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <strong>设计要点：</strong>所有文档接入后生成唯一 doc_id，原始文件存储到 MinIO，解析后的纯文本存入 PostgreSQL，确保可追溯和重新处理。
+    </div>
+  </div>
+</section>
+
+<section id="processing">
+  <h2><span class="num">4</span>文档处理层设计</h2>
+  <div class="card card-coral">
+    <h3>4.1 智能分块策略 (Chunking)</h3>
+    <p>分块是 RAG 系统最关键的环节之一，直接影响检索质量和生成效果。</p>
+
+    <table>
+      <thead>
+        <tr><th>策略</th><th>方法</th><th>适用场景</th><th>推荐</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>固定长度分块</td><td>按 Token 数切分，带重叠窗口</td><td>快速原型、均匀文本</td><td>初始方案</td></tr>
+        <tr><td>语义分块</td><td>按句子/段落语义边界切分</td><td>大多数文档</td><td class="recommend">推荐</td></tr>
+        <tr><td>标题层级分块</td><td>按 Markdown/Word 标题树切分</td><td>技术文档、报告</td><td class="recommend">推荐</td></tr>
+        <tr><td>表格分块</td><td>整表保留或按行切分</td><td>Excel、财务报表</td><td>按需</td></tr>
+        <tr><td>递归分块</td><td>先大块再切小块，保留层级</td><td>长文档、复杂结构</td><td>进阶</td></tr>
+      </tbody>
+    </table>
+
+    <h4>推荐分块参数</h4>
+    <ul>
+      <li><strong>Chunk Size</strong>：512-1024 tokens（中文约 350-700 字）</li>
+      <li><strong>Overlap</strong>：chunk_size 的 10-15%，保证上下文连续性</li>
+      <li><strong>最小 Chunk</strong>：不低于 100 tokens，避免碎片化</li>
+      <li><strong>层级关系</strong>：记录 parent_chunk_id，支持父子检索</li>
+    </ul>
+
+    <h3>4.2 向量化 (Embedding)</h3>
+    <ul>
+      <li><strong>模型选择</strong>：BGE-M3（1024维，支持中英多语言，开源可私有化）</li>
+      <li><strong>批量推理</strong>：使用 GPU 批量编码，单批 64-128 条</li>
+      <li><strong>增量更新</strong>：文档修改后只重新编码变化的 chunk</li>
+      <li><strong>多向量索引</strong>：同时生成 dense + sparse 向量，支持混合检索</li>
+    </ul>
+
+    <h3>4.3 元数据提取</h3>
+    <p>每个 Chunk 关联以下元数据，用于检索过滤和结果展示：</p>
+    <ul>
+      <li><strong>文档级</strong>：doc_id、文件名、格式、来源、上传时间、作者</li>
+      <li><strong>Chunk 级</strong>：chunk_id、page_num、section_title、char_offset</li>
+      <li><strong>业务级</strong>：知识分类标签、权限组、有效期</li>
+    </ul>
+
+    <div class="callout callout-warn">
+      <strong>注意：</strong>文档清洗阶段必须去除页眉页脚、水印、重复空行等噪声内容，否则会严重干扰检索质量。建议增加内容质量评分，低质量 Chunk 不入库。
+    </div>
+  </div>
+</section>
+
+<section id="storage">
+  <h2><span class="num">5</span>存储层设计</h2>
+  <div class="card card-amber">
+    <h3>5.1 存储组件分工</h3>
+    <table>
+      <thead>
+        <tr><th>组件</th><th>技术</th><th>职责</th><th>数据类型</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>向量数据库</td><td>Milvus</td><td>存储和检索 Embedding 向量</td><td>Float32 向量 + 标量过滤</td></tr>
+        <tr><td>关系数据库</td><td>PostgreSQL</td><td>元数据、文档索引、用户信息</td><td>结构化数据</td></tr>
+        <tr><td>对象存储</td><td>MinIO</td><td>存储原始文档文件</td><td>二进制文件 (PDF/Word/...)</td></tr>
+        <tr><td>缓存</td><td>Redis</td><td>热点查询缓存、会话状态</td><td>Key-Value</td></tr>
+        <tr><td>全文索引</td><td>Elasticsearch (可选)</td><td>BM25 关键词检索</td><td>倒排索引</td></tr>
+      </tbody>
+    </table>
+
+    <h3>5.2 Milvus 向量库设计</h3>
+    <h4>Collection Schema</h4>
+    <pre><code>{
+  "collection_name": "knowledge_chunks",
+  "fields": [
+    {"name": "chunk_id", "type": "VARCHAR", "max_length": 64, "is_primary": true},
+    {"name": "doc_id", "type": "VARCHAR", "max_length": 64},
+    {"name": "embedding", "type": "FLOAT_VECTOR", "dim": 1024},
+    {"name": "source", "type": "VARCHAR", "max_length": 128},
+    {"name": "category", "type": "VARCHAR", "max_length": 64},
+    {"name": "page_num", "type": "INT32"},
+    {"name": "created_at", "type": "INT64}
+  ],
+  "index": {
+    "index_type": "HNSW",
+    "metric_type": "COSINE",
+    "params": {"M": 16, "efConstruction": 256}
+  }
+}</code></pre>
+
+    <h4>索引选择</h4>
+    <ul>
+      <li><strong>HNSW</strong>（推荐）：查询速度快，适合百万级数据，内存占用较高</li>
+      <li><strong>IVF_FLAT</strong>：平衡速度和内存，适合千万级数据</li>
+      <li><strong>IVF_SQ8</strong>：内存优化，精度略降，适合超大规模</li>
+      <li><strong>DiskANN</strong>：磁盘索引，适合十亿级超大规模</li>
+    </ul>
+
+    <h3>5.3 PostgreSQL 核心表设计</h3>
+    <pre><code>-- 文档表
+CREATE TABLE documents (
+    doc_id          VARCHAR(64) PRIMARY KEY,
+    file_name       VARCHAR(256) NOT NULL,
+    file_format     VARCHAR(32) NOT NULL,
+    file_path       VARCHAR(512) NOT NULL,  -- MinIO 路径
+    file_hash       VARCHAR(64) NOT NULL,   -- 去重用
+    source          VARCHAR(128),
+    category        VARCHAR(64),
+    status          VARCHAR(32) DEFAULT 'pending',  -- pending/processing/ready/failed
+    chunk_count     INT DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- Chunk 表
+CREATE TABLE chunks (
+    chunk_id        VARCHAR(64) PRIMARY KEY,
+    doc_id          VARCHAR(64) REFERENCES documents(doc_id),
+    parent_chunk_id VARCHAR(64),
+    chunk_index     INT NOT NULL,
+    content         TEXT NOT NULL,
+    page_num        INT,
+    section_title   VARCHAR(512),
+    token_count     INT,
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- 用户表
+CREATE TABLE users (
+    user_id         VARCHAR(64) PRIMARY KEY,
+    username        VARCHAR(128) UNIQUE NOT NULL,
+    password_hash   VARCHAR(256) NOT NULL,
+    role            VARCHAR(32) DEFAULT 'user',  -- admin/user
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- 对话表
+CREATE TABLE conversations (
+    conv_id         VARCHAR(64) PRIMARY KEY,
+    user_id         VARCHAR(64) REFERENCES users(user_id),
+    title           VARCHAR(256),
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE messages (
+    msg_id          VARCHAR(64) PRIMARY KEY,
+    conv_id         VARCHAR(64) REFERENCES conversations(conv_id),
+    role            VARCHAR(16) NOT NULL,  -- user/assistant
+    content         TEXT NOT NULL,
+    citations       JSONB,  -- 引用的 chunk_id 列表
+    created_at      TIMESTAMP DEFAULT NOW()
+);</code></pre>
+  </div>
+</section>
+
+<section id="retrieval">
+  <h2><span class="num">6</span>检索层设计</h2>
+  <div class="card card-green">
+    <p>检索层是 RAG 系统的核心竞争力，直接决定了回答质量。本系统采用<strong>多路召回 + 混合检索 + 重排序</strong>的三阶段检索架构。</p>
+
+    <h3>6.1 查询理解与改写</h3>
+    <ul>
+      <li><strong>Query Expansion</strong>：使用 LLM 扩展同义词和相关词</li>
+      <li><strong>HyDE (Hypothetical Document Embedding)</strong>：先让 LLM 生成假设性回答，用回答的向量去检索</li>
+      <li><strong>Multi-Query</strong>：将一个查询改写为多个子查询，分别检索后合并</li>
+      <li><strong>意图识别</strong>：判断查询类型（定义/对比/列表/推理），调整检索策略</li>
+    </ul>
+
+    <h3>6.2 混合检索 (Hybrid Search)</h3>
+    <table>
+      <thead>
+        <tr><th>检索方式</th><th>原理</th><th>优势</th><th>权重</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>稠密向量检索</td><td>语义相似度 (Cosine)</td><td>理解语义、抗拼写错误</td><td>0.6</td></tr>
+        <tr><td>稀疏检索 (BM25)</td><td>关键词匹配 + TF-IDF</td><td>精确匹配专有名词</td><td>0.3</td></tr>
+        <tr><td>元数据过滤</td><td>属性精确匹配</td><td>缩小范围、权限控制</td><td>过滤</td></tr>
+      </tbody>
+    </table>
+
+    <pre><code># 混合检索伪代码
+def hybrid_search(query: str, top_k: int = 50):
+    # 1. 向量检索
+    query_embedding = bge_m3.encode(query)
+    vec_results = milvus.search(
+        collection="knowledge_chunks",
+        data=[query_embedding],
+        limit=top_k * 2,
+        filter=f"category == '{category}'"  # 元数据过滤
+    )
+
+    # 2. BM25 检索
+    bm25_results = elasticsearch.search(
+        index="knowledge_chunks",
+        body={"query": {"match": {"content": query}}},
+        size=top_k * 2
+    )
+
+    # 3. 融合排序 (RRF - Reciprocal Rank Fusion)
+    fused = rrf_merge(vec_results, bm25_results, k=60)
+
+    # 4. 重排序
+    reranked = bge_reranker.rerank(
+        query=query,
+        documents=[r.content for r in fused[:top_k]],
+        top_n=10
+    )
+    return reranked</code></pre>
+
+    <h3>6.3 重排序 (Reranking)</h3>
+    <ul>
+      <li><strong>模型</strong>：BGE-reranker-v2-m3（Cross-Encoder 架构，多语言）</li>
+      <li><strong>输入</strong>：Query + 每个候选 Chunk 的 Pair</li>
+      <li><strong>输出</strong>：相关性分数（0-1），按分数降序排列</li>
+      <li><strong>数量控制</strong>：对 Top-50 候选重排，取 Top-5~10 进入生成</li>
+      <li><strong>性能</strong>：GPU 推理，50 条 &lt; 200ms</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>为什么需要重排序？</strong>向量检索速度快但精度有限，BM25 精确但缺乏语义理解。Reranker 作为 Cross-Encoder，将 Query 和 Document 联合编码，精度远高于双塔模型，但计算量大，因此只对少量候选重排。
+    </div>
+  </div>
+</section>
+
+<section id="generation">
+  <h2><span class="num">7</span>生成层设计</h2>
+  <div class="card card-purple">
+    <h3>7.1 Prompt 工程</h3>
+    <pre><code>SYSTEM_PROMPT = """你是一个企业知识问答助手。请根据以下检索到的知识片段回答用户问题。
+
+规则：
+1. 只基于提供的知识片段回答，不要编造信息
+2. 如果知识片段中没有相关内容，明确告知"未找到相关信息"
+3. 回答末尾标注引用来源，格式：[来源: 文件名, 第X页]
+4. 回答简洁准确，避免冗余
+
+知识片段：
+{context}
+
+用户问题：{question}
+"""</code></pre>
+
+    <h3>7.2 上下文组装策略</h3>
+    <ul>
+      <li><strong>Token 预算</strong>：上下文总 Token 数控制在 LLM 上下文窗口的 60% 以内</li>
+      <li><strong>排序优先</strong>：Reranker 分数最高的 Chunk 排在最前面（Lost in the Middle 问题）</li>
+      <li><strong>去重</strong>：相似度 &gt; 0.9 的 Chunk 只保留一个</li>
+      <li><strong>补充上下文</strong>：通过 parent_chunk_id 拉取父级 Chunk 补充上下文</li>
+      <li><strong>对话历史</strong>：最近 3-5 轮对话作为上下文</li>
+    </ul>
+
+    <h3>7.3 引用溯源</h3>
+    <p>每个回答附带引用信息，用户可点击查看原文出处：</p>
+    <ul>
+      <li>回答中每个关键观点标注 [1] [2] 等引用编号</li>
+      <li>引用列表展示：文件名、页码、Chunk 原文摘要</li>
+      <li>支持点击跳转到原文档对应位置</li>
+    </ul>
+
+    <h3>7.4 LLM 推理优化</h3>
+    <ul>
+      <li><strong>推理引擎</strong>：vLLM（PagedAttention，高吞吐）</li>
+      <li><strong>量化</strong>：INT8/INT4 量化，降低显存占用</li>
+      <li><strong>流式输出</strong>：SSE 流式返回，用户首字延迟 &lt; 1s</li>
+      <li><strong>并发控制</strong>：请求队列 + 限流，避免 OOM</li>
+    </ul>
+  </div>
+</section>
+
+<section id="app">
+  <h2><span class="num">8</span>应用层设计</h2>
+  <div class="card card-accent">
+    <h3>8.1 API 设计</h3>
+    <table>
+      <thead>
+        <tr><th>接口</th><th>方法</th><th>路径</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>文档上传</td><td>POST</td><td>/api/v1/documents/upload</td><td>上传文档，异步处理</td></tr>
+        <tr><td>文档列表</td><td>GET</td><td>/api/v1/documents</td><td>分页查询文档列表</td></tr>
+        <tr><td>知识问答</td><td>POST</td><td>/api/v1/chat/completions</td><td>流式返回回答</td></tr>
+        <tr><td>对话历史</td><td>GET</td><td>/api/v1/conversations</td><td>查询对话列表</td></tr>
+        <tr><td>引用详情</td><td>GET</td><td>/api/v1/citations/{chunk_id}</td><td>获取引用原文</td></tr>
+        <tr><td>知识库统计</td><td>GET</td><td>/api/v1/stats</td><td>文档数、Chunk 数等</td></tr>
+      </tbody>
+    </table>
+
+    <h3>8.2 Web UI 功能</h3>
+    <ul>
+      <li><strong>对话界面</strong>：类似 ChatGPT 的聊天交互，支持流式输出</li>
+      <li><strong>多轮对话</strong>：支持上下文追问，对话历史管理</li>
+      <li><strong>引用展示</strong>：回答下方展示引用来源卡片，可展开查看原文</li>
+      <li><strong>文档管理</strong>：上传、预览、删除文档，查看处理状态</li>
+      <li><strong>知识库浏览</strong>：按分类浏览文档，搜索 Chunk 内容</li>
+      <li><strong>用户管理</strong>：注册登录、角色权限（管理员/普通用户）</li>
+    </ul>
+
+    <h3>8.3 认证与权限</h3>
+    <ul>
+      <li><strong>认证</strong>：JWT Token，Access Token (30min) + Refresh Token (7d)</li>
+      <li><strong>授权</strong>：RBAC 模型，admin/user 两种角色</li>
+      <li><strong>文档权限</strong>：支持文档级权限控制，不同用户可见不同文档</li>
+      <li><strong>API 限流</strong>：按用户限流，防止滥用</li>
+    </ul>
+  </div>
+</section>
+
+<section id="tech">
+  <h2><span class="num">9</span>技术选型详解</h2>
+
+  <h3>9.1 Embedding 模型对比</h3>
+  <table>
+    <thead>
+      <tr><th>模型</th><th>维度</th><th>语言</th><th>开源</th><th>MTEB 得分</th><th>推荐场景</th></tr>
+    </thead>
+    <tbody>
+      <tr class="recommend">
+        <td>BGE-M3</td><td>1024</td><td>多语言</td><td>是</td><td>64.4</td><td>企业级首选</td>
+      </tr>
+      <tr><td>text-embedding-3-large</td><td>3072</td><td>多语言</td><td>否</td><td>64.6</td><td>预算充足、不要求私有化</td></tr>
+      <tr><td>M3E-large</td><td>768</td><td>中文</td><td>是</td><td>62.4</td><td>纯中文场景</td></tr>
+      <tr><td>bge-large-zh-v1.5</td><td>1024</td><td>中文</td><td>是</td><td>63.6</td><td>中文备选</td></tr>
+    </tbody>
+  </table>
+  <div class="callout callout-tip">
+    <strong>选择 BGE-M3 的理由：</strong>开源可私有化、多语言支持好（中英混合文档）、支持 dense+sparse+colbert 三种向量、MTEB 排名靠前、智源持续维护。
+  </div>
+
+  <h3>9.2 向量数据库对比</h3>
+  <table>
+    <thead>
+      <tr><th>方案</th><th>语言</th><th>分布式</th><th>十亿级</th><th>混合检索</th><th>生态</th></tr>
+    </thead>
+    <tbody>
+      <tr class="recommend">
+        <td>Milvus</td><td>Go/C++</td><td>是</td><td>是</td><td>是</td><td>成熟</td>
+      </tr>
+      <tr><td>Qdrant</td><td>Rust</td><td>是</td><td>较好</td><td>是</td><td>成长中</td></tr>
+      <tr><td>Weaviate</td><td>Go</td><td>是</td><td>一般</td><td>内置</td><td>成熟</td></tr>
+      <tr><td>Chroma</td><td>Python</td><td>否</td><td>否</td><td>否</td><td>原型</td></tr>
+      <tr><td>pgvector</td><td>C</td><td>PG 依赖</td><td>否</td><td>需扩展</td><td>简单</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.3 LLM 对比</h3>
+  <table>
+    <thead>
+      <tr><th>模型</th><th>参数量</th><th>开源</th><th>中文能力</th><th>推理速度</th><th>部署方式</th></tr>
+    </thead>
+    <tbody>
+      <tr class="recommend">
+        <td>Qwen2.5-72B</td><td>72B</td><td>是</td><td>优秀</td><td>快 (vLLM)</td><td>私有化</td>
+      </tr>
+      <tr><td>GPT-4o</td><td>未知</td><td>否</td><td>优秀</td><td>快</td><td>API</td></tr>
+      <tr><td>DeepSeek-V3</td><td>671B(MoE)</td><td>是</td><td>优秀</td><td>快</td><td>私有化/API</td></tr>
+      <tr><td>Llama 3.1-70B</td><td>70B</td><td>是</td><td>一般</td><td>快</td><td>私有化</td></tr>
+      <tr><td>Claude 3.5 Sonnet</td><td>未知</td><td>否</td><td>好</td><td>快</td><td>API</td></tr>
+    </tbody>
+  </table>
+  <div class="callout callout-warn">
+    <strong>GPU 需求估算：</strong>Qwen2.5-72B FP16 约需 2×A100 80G；INT8 量化后约需 1×A100 80G；BGE-M3 约需 1×T4 16G；Reranker 约需 1×T4 16G。生产环境建议至少 2×A100 + 2×T4。
+  </div>
+
+  <h3>9.4 完整技术栈清单</h3>
+  <table>
+    <thead>
+      <tr><th>层次</th><th>组件</th><th>选型</th><th>版本</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>L1 接入</td><td>文档解析</td><td>Unstructured + PyMuPDF</td><td>0.15+ / 1.24+</td></tr>
+      <tr><td>L1 接入</td><td>OCR</td><td>PaddleOCR</td><td>2.7+</td></tr>
+      <tr><td>L2 处理</td><td>Embedding</td><td>BGE-M3 (FlagEmbedding)</td><td>1.2+</td></tr>
+      <tr><td>L2 处理</td><td>中文分词</td><td>jieba</td><td>0.42+</td></tr>
+      <tr><td>L3 存储</td><td>向量库</td><td>Milvus</td><td>2.4+</td></tr>
+      <tr><td>L3 存储</td><td>关系库</td><td>PostgreSQL</td><td>16+</td></tr>
+      <tr><td>L3 存储</td><td>对象存储</td><td>MinIO</td><td>最新</td></tr>
+      <tr><td>L3 存储</td><td>缓存</td><td>Redis</td><td>7.2+</td></tr>
+      <tr><td>L3 存储</td><td>全文索引</td><td>Elasticsearch</td><td>8.x</td></tr>
+      <tr><td>L4 检索</td><td>Reranker</td><td>BGE-reranker-v2-m3</td><td>最新</td></tr>
+      <tr><td>L4 检索</td><td>编排框架</td><td>LlamaIndex</td><td>0.11+</td></tr>
+      <tr><td>L5 生成</td><td>LLM</td><td>Qwen2.5-72B-Instruct</td><td>最新</td></tr>
+      <tr><td>L5 生成</td><td>推理引擎</td><td>vLLM</td><td>0.6+</td></tr>
+      <tr><td>L6 应用</td><td>后端</td><td>FastAPI + Python 3.12</td><td>0.115+</td></tr>
+      <tr><td>L6 应用</td><td>前端</td><td>React 18 + TypeScript</td><td>18+</td></tr>
+      <tr><td>L6 应用</td><td>消息队列</td><td>Celery + RabbitMQ</td><td>5.4+</td></tr>
+      <tr><td>L6 应用</td><td>监控</td><td>Prometheus + Grafana</td><td>最新</td></tr>
+      <tr><td>部署</td><td>容器</td><td>Docker + Kubernetes</td><td>1.30+</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="deploy">
+  <h2><span class="num">10</span>部署架构</h2>
+  <div class="card">
+    <h3>10.1 部署拓扑</h3>
+    <pre><code>                    ┌─────────────┐
+                    │   Nginx     │  (反向代理 + TLS)
+                    │  LoadBalancer│
+                    └──────┬──────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+        ┌─────▼─────┐ ┌───▼────┐ ┌────▼─────┐
+        │  Frontend  │ │ API    │ │ API      │
+        │  (React)   │ │ Pod 1  │ │ Pod 2    │  (FastAPI, HPA)
+        │  (Nginx)   │ │        │ │          │
+        └────────────┘ └───┬────┘ └────┬─────┘
+                            │           │
+              ┌─────────────┼───────────┼──────────┐
+              │             │           │          │
+        ┌─────▼─────┐ ┌────▼───┐ ┌─────▼────┐ ┌───▼────┐
+        │  Milvus   │ │  PG    │ │  MinIO   │ │ Redis  │
+        │  Cluster  │ │  (HA)  │ │  Cluster │ │ Cluster│
+        └───────────┘ └────────┘ └──────────┘ └────────┘
+              │
+        ┌─────▼─────┐
+        │ GPU Node  │  (vLLM + BGE-M3 + Reranker)
+        │ 2×A100    │
+        └───────────┘
+              │
+        ┌─────▼─────┐
+        │  Worker   │  (Celery, 文档处理)
+        │  Nodes    │
+        └───────────┘</code></pre>
+
+    <h3>10.2 资源规划</h3>
+    <table>
+      <thead>
+        <tr><th>节点</th><th>CPU</th><th>内存</th><th>GPU</th><th>数量</th><th>用途</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>API 节点</td><td>8C</td><td>16G</td><td>-</td><td>2+</td><td>FastAPI 服务</td></tr>
+        <tr><td>GPU 节点</td><td>16C</td><td>64G</td><td>2×A100 80G</td><td>1+</td><td>LLM + Embedding + Reranker</td></tr>
+        <tr><td>Worker 节点</td><td>8C</td><td>16G</td><td>-</td><td>2+</td><td>文档异步处理</td></tr>
+        <tr><td>Milvus 节点</td><td>8C</td><td>32G</td><td>-</td><td>3</td><td>向量库集群</td></tr>
+        <tr><td>存储节点</td><td>4C</td><td>8G</td><td>-</td><td>3</td><td>PG + MinIO + ES</td></tr>
+      </tbody>
+    </table>
+
+    <h3>10.3 最小化部署方案（个人/小团队）</h3>
+    <div class="callout callout-info">
+      如果是个人使用或小团队验证，可以用 Docker Compose 单机部署：1 台 32C/128G/1×A100 服务器即可运行全部组件。使用 Qwen2.5-7B 替代 72B 降低 GPU 需求。
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <h2><span class="num">11</span>实施路线图</h2>
+  <div class="phase-grid">
+    <div class="phase-card" style="border-top: 3px solid #3B6D11;">
+      <h4>Phase 1: MVP</h4>
+      <div class="duration">2-3 周</div>
+      <ul>
+        <li>FastAPI 后端骨架</li>
+        <li>PDF/Markdown 文档上传解析</li>
+        <li>固定长度分块 + BGE-M3</li>
+        <li>Milvus 向量检索</li>
+        <li>基础问答 API</li>
+        <li>简单命令行测试</li>
+      </ul>
+    </div>
+    <div class="phase-card" style="border-top: 3px solid #993C1D;">
+      <h4>Phase 2: 核心功能</h4>
+      <div class="duration">3-4 周</div>
+      <ul>
+        <li>多格式文档支持</li>
+        <li>语义分块 + 元数据提取</li>
+        <li>混合检索 (Vector + BM25)</li>
+        <li>BGE-Reranker 重排序</li>
+        <li>引用溯源</li>
+        <li>React Web UI</li>
+      </ul>
+    </div>
+    <div class="phase-card" style="border-top: 3px solid #0F6E56;">
+      <h4>Phase 3: 企业级</h4>
+      <div class="duration">3-4 周</div>
+      <ul>
+        <li>JWT 认证 + RBAC</li>
+        <li>多轮对话 + 上下文管理</li>
+        <li>文档权限控制</li>
+        <li>Celery 异步处理</li>
+        <li>Redis 缓存</li>
+        <li>Prometheus 监控</li>
+      </ul>
+    </div>
+    <div class="phase-card" style="border-top: 3px solid #534AB7;">
+      <h4>Phase 4: 优化扩展</h4>
+      <div class="duration">持续迭代</div>
+      <ul>
+        <li>HyDE / Multi-Query</li>
+        <li>父子检索 (Small-to-Big)</li>
+        <li>知识图谱增强</li>
+        <li>多模态支持（图片理解）</li>
+        <li>Agent 工具调用</li>
+        <li>评估体系搭建</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="optimize">
+  <h2><span class="num">12</span>性能优化策略</h2>
+  <div class="card">
+    <div class="metric-row">
+      <div class="metric">
+        <div class="val">&lt;3s</div>
+        <div class="label">查询 P99 延迟</div>
+      </div>
+      <div class="metric">
+        <div class="val">&lt;1s</div>
+        <div class="label">首字延迟 (TTFT)</div>
+      </div>
+      <div class="metric">
+        <div class="val">100+</div>
+        <div class="label">并发 QPS</div>
+      </div>
+      <div class="metric">
+        <div class="val">1M+</div>
+        <div class="label">Chunk 支持量</div>
+      </div>
+    </div>
+
+    <h3>优化手段</h3>
+    <table>
+      <thead>
+        <tr><th>环节</th><th>优化策略</th><th>预期收益</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Embedding</td><td>GPU 批量编码 + 缓存</td><td>吞吐提升 10×</td></tr>
+        <tr><td>向量检索</td><td>HNSW 索引 + ef 参数调优</td><td>P99 &lt; 50ms</td></tr>
+        <tr><td>BM25 检索</td><td>ES 分片 + 热数据缓存</td><td>P99 &lt; 100ms</td></tr>
+        <tr><td>Reranker</td><td>GPU 批量推理 + 只排 Top-50</td><td>P99 &lt; 200ms</td></tr>
+        <tr><td>LLM 推理</td><td>vLLM + 流式输出 + 量化</td><td>TTFT &lt; 800ms</td></tr>
+        <tr><td>查询缓存</td><td>Redis 缓存热门 Query 结果</td><td>命中率 30%+</td></tr>
+        <tr><td>文档处理</td><td>Celery 并行 + 增量更新</td><td>入库速度 10K chunks/min</td></tr>
+        <tr><td>前端</td><td>SSE 流式 + 虚拟滚动</td><td>用户体感即时响应</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="security">
+  <h2><span class="num">13</span>安全与合规</h2>
+  <div class="card" style="border-left: 3px solid #A32D2D;">
+    <h3>13.1 数据安全</h3>
+    <ul>
+      <li><strong>传输加密</strong>：全站 HTTPS (TLS 1.3)，内部服务间 mTLS</li>
+      <li><strong>存储加密</strong>：MinIO 服务端加密 (SSE-S3/KMS)</li>
+      <li><strong>敏感数据脱敏</strong>：文档入库前可选 PII 脱敏</li>
+      <li><strong>审计日志</strong>：记录所有文档操作和查询行为</li>
+    </ul>
+
+    <h3>13.2 访问控制</h3>
+    <ul>
+      <li><strong>认证</strong>：JWT + 可选 OAuth2/SSO 集成</li>
+      <li><strong>授权</strong>：RBAC 角色模型 + 文档级 ACL</li>
+      <li><strong>API 限流</strong>：令牌桶限流，按用户/IP 双维度</li>
+      <li><strong>防注入</strong>：输入校验 + Prompt 注入防护</li>
+    </ul>
+
+    <h3>13.3 合规要点</h3>
+    <ul>
+      <li>全栈开源组件，无数据外发风险</li>
+      <li>LLM 私有化部署，对话数据不出域</li>
+      <li>支持数据导出和完全删除（GDPR 兼容）</li>
+      <li>日志脱敏，不记录用户查询原文（可选）</li>
+    </ul>
+  </div>
+</section>
+
+<div class="footer">
+  <p>企业级 RAG 个人知识问答系统设计方案 &middot; v1.0</p>
+  <p>本文档为架构设计参考，实际实施需根据团队规模、预算和数据量进行调整</p>
+</div>
+
+</div>
+</body>
+</html>
