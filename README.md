@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/108c7a0b-51bc-46e7-83e2-a8bc98080495
+
 # 企业级 RAG 个人知识问答系统
 
 基于检索增强生成 (RAG) 技术的企业级知识问答平台，支持多格式文档上传、智能分块、混合检索、流式问答和引用溯源。
